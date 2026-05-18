@@ -13,9 +13,6 @@ def load_dataset():
   print(df.dtypes)
   return df
 
-df_raw = load_dataset()
-
-print('--------------------------------------------------------------------------------------')
 
 def column_standardization(df):
   df = df.copy()
@@ -28,33 +25,24 @@ def column_standardization(df):
     print(f"U rregulluan {len(columns_changed)} kolona")
   return df
 
-df_standardized = column_standardization(df_raw)
-print(df_standardized.columns.tolist())
-
-print('--------------------------------------------------------------------------------------')
-
 
 def optimization_fix_type(df):
   df = df.copy()
   categorical_columns = ['gender', 'degree_type', 'stream', 'college_tier',
                          'urban_or_rural', 'primary_ai_tools_used', 'uses_ai_for_assignments']
   #arsyeja pse e bejme kete eshte qe ne dataset kto te dhena mos te ruhen si string, por si kategori,
-  #menyre eficente qe mos te perdorim shume memorie kur kemi vetemdisa kategori per nje kolone
+  #menyre eficente qe mos te perdorim shume memorie kur kemi vetemdisa mundesi kategorish per nje kolone
   for column in categorical_columns:
     df[column] = df[column].astype('category')
 
   if 'seeks_career_counseling' in df.columns:
     df['seeks_career_counseling'] = df['seeks_career_counseling'].astype('boolean')
 
-  df = df.convert_dtypes() #makes not nullable columns take null values
+  df = df.convert_dtypes() #ben qe kolonat te cilat nuk marin dot vleren null, ta marin ate
   
   return df
 
-print('--------------------------------------------------------------------------------------')
 
-
-optimization = optimization_fix_type(df_standardized)
-print(optimization.dtypes)
 
 def null_handling(df):
   df = df.copy()
@@ -68,8 +56,6 @@ def null_handling(df):
   for column, num in null_columns.items():
     percentage = (num/row_num) * 100
     print(f"Kolona: {column}: {num} mungesa [{percentage:.2f}%]")
-
-  print('-------------------------------------------------------------------------')
 
   if 'primary_ai_tools_used' in df.columns:
     df['primary_ai_tools_used'] = (df['primary_ai_tools_used'].cat.add_categories('Unknown').fillna('Unknown'))
@@ -104,15 +90,133 @@ def null_handling(df):
   print(f"Numri i vlerave null pas rregullimi: {df.isnull().sum().sum()}")
   return df.convert_dtypes()
 
-df_1 =null_handling(optimization)
-print(df_1)
+#----------------------------------------------------------------------------------------------------
 
 def remove_duplicates(df):
   df = df.copy()
   row_num_before = len(df)
+
   df = df.drop_duplicates(keep= 'first')
-  print(row_num_before)
+
+  if 'student_id' in df.columns:
+    df = df.drop_duplicates(subset = 'student_id', keep = 'first')
+    # kontrollojme edhe nese id e nje studenti perseritet dy here qe ta fshijme dhe ate rast
+
+  duplicates_dropped = row_num_before - len(df)
+  if duplicates_dropped:
+    print(f"Numri i duplikatave te fshira: {duplicates_dropped}")
+  else:
+    print("Dataseti nuk ka duplikata")
+    
+  return df
 
 
 
-print(remove_duplicates(df_1))
+#----------------------------------------------------------------------------------------------------
+def outliers_check(df):
+  df = df.copy()
+
+  columns = [
+          'daily_ai_tool_usage_hrs',
+          'self_learning_hours_per_week',
+          'daily_study_hours',
+          'social_media_hrs_per_day',
+          'sleep_hours',
+          'weekly_job_application_count',
+      ]
+  
+  for column in columns:
+    q1 = df[column].quantile(0.25)
+    q3 = df[column].quantile(0.75)
+    iqr = q3-q1
+    qLow = q1 - 1.5 * iqr
+    qHigh = q3 + 1.5 * iqr
+
+    outliers_count = ((df[column] < qLow)| (df[column] > qHigh)).sum()
+    if outliers_count > 0:
+      df[column] = df[column].astype(float).clip(lower = qLow, upper = qHigh)
+      print(f"{outliers_count} vlera outliers u kufizuan ne kolonen: {column}")
+
+    else:
+      print(f" Kolona [{column}] nuk kishte outliers")
+  
+  return df
+
+#----------------------------------------------------------------------------------------------------
+
+
+def text_standardization(df):
+  df = df.copy()
+
+  text_columns = [
+        'gender', 'degree_type', 'stream', 'college_tier',
+        'urban_or_rural', 'uses_ai_for_assignments', 'primary_ai_tools_used'
+    ]
+  
+  for column in text_columns:
+    if hasattr(df[column], 'cat'):
+      df[column] =df[column].astype(str).str.strip().str.title().astype('category')
+      # kthen kolonen nga kategori ne string , heq hapsirat par mbrapa, ben shkronjen e pare kapitale, e kthen perseri ne kategori.
+    else:
+      df[column] = df[column].str.strip().str.title()
+  
+  manual_fix = {
+      'Chatgpt':        'ChatGPT',
+      'Github Copilot': 'GitHub Copilot',
+  }
+  if 'primary_ai_tools_used' in df.columns:
+      df['primary_ai_tools_used'] = (
+          df['primary_ai_tools_used']
+          .astype(str)
+          .replace(manual_fix)
+          .astype('category')
+      )
+
+  return df
+  
+
+def column_mapping(df):
+  if 'seeks_career_counseling' in df.columns:
+        df['seeks_career_counseling'] = (
+            df['seeks_career_counseling']
+            .astype(str)
+            .map({'True': 'Yes', 'False': 'No', '1.0': 'Yes', '0.0': 'No',
+                  '1': 'Yes', '0': 'No'})
+            .astype('category')
+        )
+  return df
+
+
+def clean_dataset():
+
+    df = load_dataset()
+    print('--------------------------------------------------------------------------------------')
+
+    df = column_standardization(df)
+    print('--------------------------------------------------------------------------------------')
+
+    df = optimization_fix_type(df)
+    print('--------------------------------------------------------------------------------------')
+
+    df = null_handling(df)
+    print('--------------------------------------------------------------------------------------')
+
+    df = remove_duplicates(df)
+    print('--------------------------------------------------------------------------------------')
+
+    df = outliers_check(df)
+    print('--------------------------------------------------------------------------------------')
+
+    df = text_standardization(df)
+    print('--------------------------------------------------------------------------------------')
+
+    df = column_mapping(df)
+
+    df.to_csv(CLEAN_PATH, index=False)
+
+    print(f"Madhesia perfundimtare e datasetit: {len(df):,} || Kolona: {df.shape[1]} || Mungesa totale (NaN): {df.isnull().sum().sum()}")
+    print(f"Skedari  perfundimtar u ruajt tek: {CLEAN_PATH}")
+    
+    return df
+
+df_final = clean_dataset()
