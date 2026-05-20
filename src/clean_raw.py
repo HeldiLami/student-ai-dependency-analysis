@@ -214,7 +214,7 @@ def clean_dataset():
 
     df.to_csv(CLEAN_PATH, index=False)
 
-    print(f"Madhesia perfundimtare e datasetit: {len(df):,} || Kolona: {df.shape[1]} || Mungesa totale (NaN): {df.isnull().sum().sum()}")
+    print(f"Madhesia perfundimtare e datasetit: {len(df)} || Kolona: {df.shape[1]} || Mungesa totale (NaN): {df.isnull().sum().sum()}")
     print(f"Skedari  perfundimtar u ruajt tek: {CLEAN_PATH}")
     
     return df
